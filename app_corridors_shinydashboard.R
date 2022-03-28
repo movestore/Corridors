@@ -70,27 +70,25 @@ server <- function(input, output) {
   observe({
     RV$indv <- namesCorresp$nameInd[namesCorresp$tabIndv==input$sidebarMenu]
     RV$thintime <- input[[paste0(input$sidebarMenu, '_timeThin')]]
+    RV$speedProp <- input[[paste0(input$sidebarMenu, '_speedProp')]]
+    RV$circProp <- input[[paste0(input$sidebarMenu, '_circProp')]]
+    RV$clustDist <- input[[paste0(input$sidebarMenu, '_clustDist')]]
   })
 
 
   for(i in 1:ntabs){
     output[[plotnames[i]]] <- renderPlot({
       dataSubInd <-  dataInp[[RV$indv]]
-      # plot(dataSubInd, main=namesIndiv(dataSubInd))
-      # plot(dataSubInd, main=RV$indv)
-      
+
       dataSubIndTime <- dataSubInd[!duplicated(round_date(timestamps(dataSubInd), paste0(RV$thintime," mins"))),]
       plot(dataSubIndTime, type="b",pch=20,main=namesIndiv(dataSubIndTime))
-      # corridorCalc <- corridor(x=dataSubIndTime, speedProp=input[[speedPropnames[i]]], circProp=input[[circPropnames[i]]], plot=FALSE)
-      # crpts <- corridorCalc@data[burstId(corridorCalc)=="corridor",c("segMid_x","segMid_y")]
-      # coordinates(crpts) <- ~segMid_x+segMid_y
-      # projection(crpts) <- projection(dataSubIndTime)
-      # plot(crpts)
+      
+      corridorCalc <- corridor(x=dataSubIndTime, speedProp=RV$speedProp, circProp=RV$circProp, plot=FALSE)
+      crpts <- corridorCalc@data[burstId(corridorCalc)=="corridor",c("segMid_x","segMid_y")]
+      coordinates(crpts) <- ~segMid_x+segMid_y
+      projection(crpts) <- projection(dataSubIndTime)
+      points(crpts,col="red")
 
-      # plotData <-  RV$plotData
-      # p <- ggplot(plotData, aes(x = x, y = value, colour = factor(group))) +
-      #   geom_line() + geom_point()
-      # print(p)
     })
   }
 
