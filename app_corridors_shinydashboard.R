@@ -54,8 +54,8 @@ server <- function(input, output) {
                                     bsTooltip(id=speedPropnames[i], title="Proportion of speeds which are high enough to be a valid corridor point (default: speeds that are greater than 75 % of all speeds)", placement = "bottom", trigger = "hover", options = list(container = "body"))),
                              column(3,sliderInput(inputId=circPropnames[i],label="Paralellnes", min=0,max=1, value=0.25, step=0.01),
                                     bsTooltip(id=circPropnames[i], title="Proportion of the circular variances that is low enough to be a valid corridor point. Low values indicate that the segments are (near) parallel (default: variances that are lower than 25 % of all variances)", placement = "bottom", trigger = "hover", options = list(container = "body"))),
-                             column(3, numericInput(timeThinnames[i],"Thin track to X mins",value=15),
-                                    bsTooltip(id=timeThinnames[i], title="This is specially recomended for high resolution tracks to ease finding reagions wtih paralell segments", placement = "bottom", trigger = "hover", options = list(container = "body"))),
+                             column(3, numericInput(timeThinnames[i],"Thin track to X mins",min=0,max=60, value=0, step=1),
+                                    bsTooltip(id=timeThinnames[i], title="This is specially recomended for high resolution tracks to ease finding regions wtih paralell segments", placement = "bottom", trigger = "hover", options = list(container = "body"))),
                              column(3, numericInput(clustDistnames[i],"Distance between corridor clusters (mts)",value=300),
                                     bsTooltip(id=clustDistnames[i], title="The radius of the cicles displayed on the map correspond to this value. All identified 'corridor segments' that fall within each cicle will be identified as a corridor", placement = "bottom", trigger = "hover", options = list(container = "body")))
                            ),
@@ -79,16 +79,52 @@ server <- function(input, output) {
   for(i in 1:ntabs){
     output[[plotnames[i]]] <- renderPlot({
       dataSubInd <-  dataInp[[RV$indv]]
-
-      dataSubIndTime <- dataSubInd[!duplicated(round_date(timestamps(dataSubInd), paste0(RV$thintime," mins"))),]
-      plot(dataSubIndTime, type="b",pch=20,main=namesIndiv(dataSubIndTime))
+      
+      if(RV$thintime==0){dataSubIndTime <- dataSubInd
+      } else {
+      dataSubIndTime <- dataSubInd[!duplicated(round_date(timestamps(dataSubInd), paste0(RV$thintime," mins"))),]}
+      
+      # plot(dataSubIndTime, type="b",pch=20,main=namesIndiv(dataSubIndTime))
       
       corridorCalc <- corridor(x=dataSubIndTime, speedProp=RV$speedProp, circProp=RV$circProp, plot=FALSE)
-      crpts <- corridorCalc@data[burstId(corridorCalc)=="corridor",c("segMid_x","segMid_y")]
+      
+      crpts <- corridorCalc@data[burstId(corridorCalc)=="corridor",c("segMid_x","segMid_y")] ## something needs to be included if there is only 1 corridor point identified, as 1 points cannot be clustered and gives an error
       coordinates(crpts) <- ~segMid_x+segMid_y
       projection(crpts) <- projection(dataSubIndTime)
-      points(crpts,col="red")
+      # points(crpts,col="red")
+      ## distance matrix
+      dist <- distm(crpts, fun=distGeo)
+      ## clustering
+      hc <- hclust(as.dist(dist), method="single") # complete single
+      # plot(hc)
+      # define clusters based on a tree "height" cutoff distance (distance between corridor clusters) and add them to the SpDataFrame
+      crpts$clust <- cutree(hc, h=RV$clustDist)
 
+      # add nb of corridor segments per cluster to SpDataFrame
+      tbCount <- data.frame(table(crpts$clust))
+      for(j in tbCount$Var1){
+        crpts$nbCorrInClust[crpts$clust==j] <- tbCount$Freq[tbCount$Var1==j]
+      }
+
+      # get the centroid coords for each cluster
+      cent <- matrix(ncol=2, nrow=max(crpts$clust))
+
+      cent <- data.frame(x=NA,y=NA,clusterID=unique(crpts$clust))
+      for(i in unique(crpts$clust)){
+        # gCentroid from the rgeos package
+        cent[cent$clusterID==i,c("x","y")] <- gCentroid(subset(crpts, clust == i))@coords
+      }
+      # compute circles around the centroid coords using "clustDist" radius
+      ci <- circles(cent[,c("x","y")], d=RV$clustDist, lonlat=T,dissolve=F)
+
+      if(!any(burstId(corridorCalc)=="corridor")){## if levels do not contain "corridor"
+        plot(dataSubIndTime, type="b",pch=20,main=paste0("No corridors found - ",namesIndiv(dataSubIndTime))) # change this
+      } else{
+      plot(dataSubIndTime, type="l")
+      plot(ci@polygons, add=T)
+      plot(crpts, col=rainbow(max(crpts$clust))[factor(crpts$clust)], add=T, pch=19)
+      text(cent[,1],cent[,2],pos=3, labels=paste0("Grp:",1:max(crpts$clust)))
+}
     })
   }
 
