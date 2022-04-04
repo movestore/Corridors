@@ -10,6 +10,7 @@ library(geosphere)
 library(dismo)
 library(rgeos)
 library(stringr)
+library(sf)
 
 ## input data 
 data(fishers)
@@ -59,13 +60,16 @@ server <- function(input, output) {
                              column(3, numericInput(clustDistnames[i],"Distance between corridor clusters (mts)",value=300),
                                     bsTooltip(id=clustDistnames[i], title="The radius of the cicles displayed on the map correspond to this value. All identified 'corridor segments' that fall within each cicle will be identified as a corridor", placement = "bottom", trigger = "hover", options = list(container = "body")))
                            ),
-                           plotOutput(plotnames[i])
+                           plotOutput(plotnames[i],dblclick = "plot_dblclick",
+                                      brush = brushOpts(id = "plot_brush",resetOnNew = TRUE)
+                           )
       )
     }
     do.call(tabItems, Tabs)
   })
                            
-
+  ranges <- reactiveValues(x_range = NULL, y_range = NULL) ## for zoom of plot
+  
   RV <- reactiveValues()
   observe({
     RV$indv <- namesCorresp$nameInd[namesCorresp$tabIndv==input$sidebarMenu]
@@ -73,6 +77,8 @@ server <- function(input, output) {
     RV$speedProp <- input[[paste0(input$sidebarMenu, '_speedProp')]]
     RV$circProp <- input[[paste0(input$sidebarMenu, '_circProp')]]
     RV$clustDist <- input[[paste0(input$sidebarMenu, '_clustDist')]]
+    # x_range  <-  NULL
+    # y_range  <-  NULL
   })
 
 
@@ -120,11 +126,31 @@ server <- function(input, output) {
       if(!any(burstId(corridorCalc)=="corridor")){## if levels do not contain "corridor"
         plot(dataSubIndTime, type="b",pch=20,main=paste0("No corridors found - ",namesIndiv(dataSubIndTime))) # change this
       } else{
-      plot(dataSubIndTime, type="l")
-      plot(ci@polygons, add=T)
-      plot(crpts, col=rainbow(max(crpts$clust))[factor(crpts$clust)], add=T, pch=19)
-      text(cent[,1],cent[,2],pos=3, labels=paste0("Grp:",1:max(crpts$clust)))
+      # plot(dataSubIndTime, type="l")
+      # plot(ci@polygons, add=T)
+      # plot(crpts, col=rainbow(max(crpts$clust))[factor(crpts$clust)], add=T, pch=19)
+      # text(cent[,1],cent[,2],pos=3, labels=paste0("Grp:",1:max(crpts$clust)))
+      # 
+      indDF <- data.frame(long=coordinates(dataSubIndTime)[,1],lat=coordinates(dataSubIndTime)[,2])
+      cisf <- st_as_sfc(ci@polygons)
+      crptssf <- st_as_sf(crpts)
+      ggplot()+geom_path(data=indDF,aes(long,lat))+coord_equal()+
+        geom_sf(data=crptssf, aes(color=as.factor(clust)))+
+        geom_sf(data=cisf, fill=NA, color="red")+
+        coord_cartesian(xlim = ranges$x_range, ylim = ranges$y_range, expand = FALSE)
+      
 }
+    })
+    observeEvent(input$plot_dblclick, {
+      brush <- input$plot_brush
+      if (!is.null(brush)) {
+        ranges$x_range <- c(brush$xmin, brush$xmax)
+        ranges$y_range <- c(brush$ymin, brush$ymax)
+        
+      } else {
+        ranges$x_range <- NULL
+        ranges$y_range <- NULL
+      }
     })
   }
 
