@@ -1,6 +1,7 @@
 library(shiny)
 library(shinydashboard)
 # library(shinydashboardPlus)
+library("dashboardthemes")
 library(move)
 library(ggplot2)
 library(shinyWidgets)
@@ -13,18 +14,29 @@ library(stringr)
 library(sf)
 
 ## input data 
-data(fishers)
-dataInp <- fishers
+# data(fishers)
+# dataInp <- fishers
 
-# dataInp <- readRDS("/home/anne/MoveAppsGit/allesMoegliche/data/carn.rds")
+dataInp <- readRDS("/home/anne/MoveAppsGit/allesMoegliche/data/carn.rds")
 ####
 
 
 ui <- dashboardPage(
   dashboardHeader(title = "Corridors"),
-  dashboardSidebar(uiOutput("Sidebar")),
-  dashboardBody(uiOutput("TabUI")),
-  skin = 'green'
+  dashboardSidebar(uiOutput("Sidebar"),
+                   tags$style( ## make a vertical scroll bar on the sidebar so all tabs can be accessed while seeing the main panel
+                     "#sidebarItemExpanded {
+                      overflow: auto;
+                      height: calc(100vh - 50px) !important;
+                     }"),
+                     tags$style(HTML(".main-sidebar .sidebar .sidebar-menu .treeview-menu li.active a {background-color: orange !important;}"))
+
+                   ),
+  dashboardBody(uiOutput("TabUI"),
+                shinyDashboardThemes( #https://github.com/nik01010/dashboardthemes
+                  theme = "grey_light"
+                ))#,
+  # skin = 'green'
 )
 
 
@@ -38,12 +50,17 @@ server <- function(input, output) {
   timeThinnames <- paste0(tabnames, '_timeThin')
   clustDistnames <- paste0(tabnames, '_clustDist')
   plotnames <- paste0("plot_",tabnames) 
+  plot_dblclick <- paste0("plot_dblclick_",tabnames)
+  plot_brush <- paste0("plot_brush_", tabnames)
+  
   
   output$Sidebar <- renderUI({
     Menus <- vector("list", ntabs)
     for(i in 1:ntabs){
       Menus[[i]] <-   menuItem(tabnames[i], icon=icon("paw"), tabName = tabnames[i], selected = i==1) } #icon(name="scribble",class="fa-thin") <i class="fa-solid fa-code-merge"></i> <i class="fa-solid fa-circle-nodes"></i>
-    do.call(function(...) sidebarMenu(id = 'sidebarMenu', ...), Menus)
+    do.call(function(...) sidebarMenu(id = 'sidebarMenu',...), Menus)
+    
+
   })
   
   output$TabUI <- renderUI({
@@ -60,15 +77,26 @@ server <- function(input, output) {
                              column(3, numericInput(clustDistnames[i],"Distance between corridor clusters (mts)",value=300),
                                     bsTooltip(id=clustDistnames[i], title="The radius of the cicles displayed on the map correspond to this value. All identified 'corridor segments' that fall within each cicle will be identified as a corridor", placement = "bottom", trigger = "hover", options = list(container = "body")))
                            ),
-                           plotOutput(plotnames[i],dblclick = "plot_dblclick",
-                                      brush = brushOpts(id = "plot_brush",resetOnNew = TRUE)
-                           )
+                           # plotOutput(plotnames[i],dblclick = "plot_dblclick", brush = brushOpts(id = "plot_brush",resetOnNew = TRUE))
+                           plotOutput(plotnames[i],dblclick = plot_dblclick[i], brush = brushOpts(id = plot_brush[i],resetOnNew = TRUE),height = "80vh")
       )
     }
     do.call(tabItems, Tabs)
   })
                            
   ranges <- reactiveValues(x_range = NULL, y_range = NULL) ## for zoom of plot
+  observeEvent(input[[paste0("plot_dblclick_",input$sidebarMenu)]], {
+    brush <- input[[paste0("plot_brush",input$sidebarMenu)]]
+    if (!is.null(brush)) {
+      ranges$x_range <- c(brush$xmin, brush$xmax)
+      ranges$y_range <- c(brush$ymin, brush$ymax)
+      
+    } else {
+      ranges$x_range <- NULL
+      ranges$y_range <- NULL
+    }
+  })
+  
   
   RV <- reactiveValues()
   observe({
@@ -77,8 +105,6 @@ server <- function(input, output) {
     RV$speedProp <- input[[paste0(input$sidebarMenu, '_speedProp')]]
     RV$circProp <- input[[paste0(input$sidebarMenu, '_circProp')]]
     RV$clustDist <- input[[paste0(input$sidebarMenu, '_clustDist')]]
-    # x_range  <-  NULL
-    # y_range  <-  NULL
   })
 
 
@@ -88,10 +114,12 @@ server <- function(input, output) {
       
       if(RV$thintime==0){dataSubIndTime <- dataSubInd
       } else {
+        # dataSubIndTime <- fishers[[1]]
       dataSubIndTime <- dataSubInd[!duplicated(round_date(timestamps(dataSubInd), paste0(RV$thintime," mins"))),]}
       
       # plot(dataSubIndTime, type="b",pch=20,main=namesIndiv(dataSubIndTime))
       
+      # corridorCalc <- corridor(x=dataSubIndTime)
       corridorCalc <- corridor(x=dataSubIndTime, speedProp=RV$speedProp, circProp=RV$circProp, plot=FALSE)
       
       crpts <- corridorCalc@data[burstId(corridorCalc)=="corridor",c("segMid_x","segMid_y")] ## something needs to be included if there is only 1 corridor point identified, as 1 points cannot be clustered and gives an error
@@ -132,29 +160,32 @@ server <- function(input, output) {
       # text(cent[,1],cent[,2],pos=3, labels=paste0("Grp:",1:max(crpts$clust)))
       # 
       indDF <- data.frame(long=coordinates(dataSubIndTime)[,1],lat=coordinates(dataSubIndTime)[,2])
-      cisf <- st_as_sfc(ci@polygons)
-      crptssf <- st_as_sf(crpts)
-      ggplot()+geom_path(data=indDF,aes(long,lat))+coord_equal()+
-        geom_sf(data=crptssf, aes(color=as.factor(clust)))+
-        geom_sf(data=cisf, fill=NA, color="red")+
-        coord_cartesian(xlim = ranges$x_range, ylim = ranges$y_range, expand = FALSE)
+      cifort <- fortify(ci@polygons, region="ID")
       
+      ggplot()+geom_path(data=indDF,aes(long,lat))+
+        geom_point(data=as.data.frame(crpts), aes(segMid_x, segMid_y,color=as.factor(clust)))+
+        geom_polygon(data=cifort, aes(long, lat, group=group),colour='red', fill=NA)+
+        coord_fixed(xlim = ranges$x_range, ylim = ranges$y_range, expand = T)
 }
     })
-    observeEvent(input$plot_dblclick, {
-      brush <- input$plot_brush
-      if (!is.null(brush)) {
-        ranges$x_range <- c(brush$xmin, brush$xmax)
-        ranges$y_range <- c(brush$ymin, brush$ymax)
-        
-      } else {
-        ranges$x_range <- NULL
-        ranges$y_range <- NULL
-      }
-    })
+    # observeEvent(input$plot_dblclick, {
+    #   brush <- input$plot_brush
+    #   if (!is.null(brush)) {
+    #     ranges$x_range <- c(brush$xmin, brush$xmax)
+    #     ranges$y_range <- c(brush$ymin, brush$ymax)
+    #     
+    #   } else {
+    #     ranges$x_range <- NULL
+    #     ranges$y_range <- NULL
+    #   }
+    # })
+    
+   
   }
 
 }
 
 shinyApp(ui, server)
+
+
 
