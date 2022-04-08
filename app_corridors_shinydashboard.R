@@ -1,66 +1,57 @@
-library(shiny)
-library(shinydashboard)
-# library(shinydashboardPlus)
+library("shiny")
+library("shinydashboard")
 library("dashboardthemes")
-library(move)
-library(ggplot2)
-library(shinyWidgets)
-library(shinyBS) ## to display message when hovering over input element in UI
-library(lubridate)
-library(geosphere)
-library(dismo)
-library(rgeos)
-library(stringr)
-library(sf)
+library("move")
+library("ggplot2")
+library("shinyBS") ## to display message when hovering over input element in UI
+library("lubridate")
+library("geosphere")
+library("dismo")
+library("rgeos")
+library("stringr")
+
 
 ## input data 
-# data(fishers)
-# dataInp <- fishers
+data(fishers)
+dataInp <- fishers
 
-dataInp <- readRDS("/home/anne/MoveAppsGit/allesMoegliche/data/carn.rds")
+# dataInp <- readRDS("/home/anne/MoveAppsGit/allesMoegliche/data/carn.rds")
 ####
 
 
 ui <- dashboardPage(
-  dashboardHeader(title = "Corridors"),
+  dashboardHeader(title = "Corridors per individual",titleWidth=300),
   dashboardSidebar(uiOutput("Sidebar"),
                    tags$style( ## make a vertical scroll bar on the sidebar so all tabs can be accessed while seeing the main panel
                      "#sidebarItemExpanded {
                       overflow: auto;
                       height: calc(100vh - 50px) !important;
-                     }"),
-                     tags$style(HTML(".main-sidebar .sidebar .sidebar-menu .treeview-menu li.active a {background-color: orange !important;}"))
-
-                   ),
+                     }")),
   dashboardBody(uiOutput("TabUI"),
                 shinyDashboardThemes( #https://github.com/nik01010/dashboardthemes
-                  theme = "grey_light"
-                ))#,
-  # skin = 'green'
+                  theme = "grey_dark"
+                ))
+  # ,skin = 'green'
 )
 
 
 server <- function(input, output) {
-
+  
   namesCorresp <- data.frame(nameInd=namesIndiv(dataInp) , tabIndv=str_replace_all(namesIndiv(dataInp), "[^[:alnum:]]", ""))
   ntabs <- length(namesIndiv(dataInp))
-  tabnames <- str_replace_all(namesIndiv(dataInp), "[^[:alnum:]]", "")
+  tabnames <- str_replace_all(namesIndiv(dataInp), "[^[:alnum:]]", "") #it does not allow punctuation or spaces
   speedPropnames <- paste0(tabnames, '_speedProp') 
   circPropnames <- paste0(tabnames, '_circProp') 
   timeThinnames <- paste0(tabnames, '_timeThin')
   clustDistnames <- paste0(tabnames, '_clustDist')
   plotnames <- paste0("plot_",tabnames) 
-  plot_dblclick <- paste0("plot_dblclick_",tabnames)
-  plot_brush <- paste0("plot_brush_", tabnames)
   
   
   output$Sidebar <- renderUI({
     Menus <- vector("list", ntabs)
     for(i in 1:ntabs){
-      Menus[[i]] <-   menuItem(tabnames[i], icon=icon("paw"), tabName = tabnames[i], selected = i==1) } #icon(name="scribble",class="fa-thin") <i class="fa-solid fa-code-merge"></i> <i class="fa-solid fa-circle-nodes"></i>
+      Menus[[i]] <-   menuItem(tabnames[i], icon=icon("paw"), tabName = tabnames[i], selected = i==1) }
     do.call(function(...) sidebarMenu(id = 'sidebarMenu',...), Menus)
-    
-
   })
   
   output$TabUI <- renderUI({
@@ -70,34 +61,33 @@ server <- function(input, output) {
                            fluidRow(
                              column(3,sliderInput(inputId=speedPropnames[i],label="Speed", min=0,max=1, value=0.75, step=0.01),
                                     bsTooltip(id=speedPropnames[i], title="Proportion of speeds which are high enough to be a valid corridor point (default: speeds that are greater than 75 % of all speeds)", placement = "bottom", trigger = "hover", options = list(container = "body"))),
-                             column(3,sliderInput(inputId=circPropnames[i],label="Paralellnes", min=0,max=1, value=0.25, step=0.01),
-                                    bsTooltip(id=circPropnames[i], title="Proportion of the circular variances that is low enough to be a valid corridor point. Low values indicate that the segments are (near) parallel (default: variances that are lower than 25 % of all variances)", placement = "bottom", trigger = "hover", options = list(container = "body"))),
+                             column(3,sliderInput(inputId=circPropnames[i],label="Parallelism", min=0,max=1, value=0.25, step=0.01),
+                                    bsTooltip(id=circPropnames[i], title="Proportion of the circular variances that is low enough to be a valid corridor point. Low values indicate that the segments are (near) parallel (default: variances that are lower than 25 % of all variances)", placement = "bottom", trigger = "hover", options = list(container = "body"))), ## maybe change wording to make it simpler: the lower the value, the more parallel are the segments
                              column(3, numericInput(timeThinnames[i],"Thin track to X mins",min=0,max=60, value=0, step=1),
-                                    bsTooltip(id=timeThinnames[i], title="This is specially recomended for high resolution tracks to ease finding regions wtih paralell segments", placement = "bottom", trigger = "hover", options = list(container = "body"))),
+                                    bsTooltip(id=timeThinnames[i], title="This is specially recomended for high resolution tracks to ease finding regions wtih paralell segments. Default (=0) no thining", placement = "bottom", trigger = "hover", options = list(container = "body"))),
                              column(3, numericInput(clustDistnames[i],"Distance between corridor clusters (mts)",value=300),
                                     bsTooltip(id=clustDistnames[i], title="The radius of the cicles displayed on the map correspond to this value. All identified 'corridor segments' that fall within each cicle will be identified as a corridor", placement = "bottom", trigger = "hover", options = list(container = "body")))
                            ),
-                           # plotOutput(plotnames[i],dblclick = "plot_dblclick", brush = brushOpts(id = "plot_brush",resetOnNew = TRUE))
-                           plotOutput(plotnames[i],dblclick = plot_dblclick[i], brush = brushOpts(id = plot_brush[i],resetOnNew = TRUE),height = "80vh")
+                           plotOutput(plotnames[i],dblclick = paste0(plotnames[i],"_dblclick"), brush = brushOpts(id = paste0(plotnames[i],"_brush"),resetOnNew = TRUE), height = "80vh")
       )
     }
     do.call(tabItems, Tabs)
   })
-                           
+  
+  ## zoom into each plot with double click, back to full with double click                        
   ranges <- reactiveValues(x_range = NULL, y_range = NULL) ## for zoom of plot
-  observeEvent(input[[paste0("plot_dblclick_",input$sidebarMenu)]], {
-    brush <- input[[paste0("plot_brush",input$sidebarMenu)]]
+  observeEvent(input[[paste0("plot_",input$sidebarMenu,"_dblclick")]], {
+    brush <- input[[paste0("plot_",input$sidebarMenu, "_brush")]]
     if (!is.null(brush)) {
       ranges$x_range <- c(brush$xmin, brush$xmax)
       ranges$y_range <- c(brush$ymin, brush$ymax)
-      
     } else {
       ranges$x_range <- NULL
       ranges$y_range <- NULL
     }
   })
   
-  
+  ## get input values for each tab
   RV <- reactiveValues()
   observe({
     RV$indv <- namesCorresp$nameInd[namesCorresp$tabIndv==input$sidebarMenu]
@@ -106,83 +96,80 @@ server <- function(input, output) {
     RV$circProp <- input[[paste0(input$sidebarMenu, '_circProp')]]
     RV$clustDist <- input[[paste0(input$sidebarMenu, '_clustDist')]]
   })
-
-
+  
+  
   for(i in 1:ntabs){
     output[[plotnames[i]]] <- renderPlot({
       dataSubInd <-  dataInp[[RV$indv]]
       
-      if(RV$thintime==0){dataSubIndTime <- dataSubInd
+      if(RV$thintime==0){dataSubIndTime <- dataSubInd ## no thining by time
       } else {
-        # dataSubIndTime <- fishers[[1]]
-      dataSubIndTime <- dataSubInd[!duplicated(round_date(timestamps(dataSubInd), paste0(RV$thintime," mins"))),]}
+        dataSubIndTime <- dataSubInd[!duplicated(round_date(timestamps(dataSubInd), paste0(RV$thintime," mins"))),]
+      }
+      ## extracting some data for plots
+      indDF <- data.frame(long=coordinates(dataSubIndTime)[,1],lat=coordinates(dataSubIndTime)[,2])
+      indivName <- namesIndiv(dataSubIndTime)
       
-      # plot(dataSubIndTime, type="b",pch=20,main=namesIndiv(dataSubIndTime))
-      
-      # corridorCalc <- corridor(x=dataSubIndTime)
       corridorCalc <- corridor(x=dataSubIndTime, speedProp=RV$speedProp, circProp=RV$circProp, plot=FALSE)
       
-      crpts <- corridorCalc@data[burstId(corridorCalc)=="corridor",c("segMid_x","segMid_y")] ## something needs to be included if there is only 1 corridor point identified, as 1 points cannot be clustered and gives an error
-      coordinates(crpts) <- ~segMid_x+segMid_y
-      projection(crpts) <- projection(dataSubIndTime)
-      # points(crpts,col="red")
-      ## distance matrix
-      dist <- distm(crpts, fun=distGeo)
-      ## clustering
-      hc <- hclust(as.dist(dist), method="single") # complete single
-      # plot(hc)
-      # define clusters based on a tree "height" cutoff distance (distance between corridor clusters) and add them to the SpDataFrame
-      crpts$clust <- cutree(hc, h=RV$clustDist)
-
-      # add nb of corridor segments per cluster to SpDataFrame
-      tbCount <- data.frame(table(crpts$clust))
-      for(j in tbCount$Var1){
-        crpts$nbCorrInClust[crpts$clust==j] <- tbCount$Freq[tbCount$Var1==j]
+      if(!any(burstId(corridorCalc)=="corridor") || length(burstId(corridorCalc)[burstId(corridorCalc)=="corridor"])==1){  ## if levels do not contain "corridor" OR if there is only 1 corridor point identified it cannot be clustered and gives an error
+        
+        cntr_x <- (max(indDF$long)+min(indDF$long))/2
+        cntr_y <- (max(indDF$lat)+min(indDF$lat))/2
+        
+        ggplot()+geom_path(data=indDF,aes(long,lat))+
+          labs(title=indivName, x ="Longitude", y = "Latitude")+ 
+          theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                panel.background = element_blank(), panel.border = element_rect(colour = "black", fill=NA, size=1))+
+          geom_label(aes(x=cntr_x,y=cntr_y), label="No corridors found", color="red", size=8)+
+          coord_fixed(xlim = ranges$x_range, ylim = ranges$y_range, expand = T)
+      } else {
+        # ## to give each end pt of corridor segment also corridor id
+        # crptsPosition <- which(burstId(corridorCalc)=="corridor")
+        # dataSubIndTime$corridor <- "no.corridor" 
+        # dataSubIndTime$corridor[crptsPosition] <- "corridor"
+        # dataSubIndTime$corridor[crptsPosition+1] <- "corridor"
+        
+        ## corridor segment midpoints
+        midCrPts <- corridorCalc@data[burstId(corridorCalc)=="corridor",c("segMid_x","segMid_y")] 
+        coordinates(midCrPts) <- ~segMid_x+segMid_y
+        projection(midCrPts) <- projection(dataSubIndTime)
+        ## distance matrix
+        dist <- distm(midCrPts, fun=distGeo)
+        ## clustering
+        hc <- hclust(as.dist(dist), method="single") # complete single
+        # define clusters based on a tree "height" cutoff distance (distance between corridor clusters) and add them to the SpDataFrame
+        midCrPts$clust <- cutree(hc, h=RV$clustDist)
+        # add nb of corridor segments per cluster to SpDataFrame
+        tbCount <- data.frame(table(midCrPts$clust))
+        for(j in tbCount$Var1){
+          midCrPts$nbCorrInClust[midCrPts$clust==j] <- tbCount$Freq[tbCount$Var1==j]
+        }
+        ##### make here clusters selecable, unselectable, remove those with lesss than X points, etc
+        # get the centroid coords for each cluster
+        centClust <- matrix(ncol=2, nrow=max(midCrPts$clust))
+        centClust <- data.frame(x=NA,y=NA,clusterID=unique(midCrPts$clust))
+        for(i in unique(midCrPts$clust)){
+          centClust[centClust$clusterID==i,c("x","y")] <- gCentroid(subset(midCrPts, clust == i))@coords
+        }
+        # compute circles around the cluster centroids with "clustDist" radius
+        clusterCircles <- circles(centClust[,c("x","y")], d=RV$clustDist, lonlat=T,dissolve=F)
+        
+       
+        cifort <- fortify(clusterCircles@polygons, region="ID")
+        
+        ggplot()+geom_path(data=indDF,aes(long,lat))+
+          geom_point(data=as.data.frame(midCrPts), aes(segMid_x, segMid_y,color=as.factor(clust)))+
+          geom_polygon(data=cifort, aes(long, lat, group=id,colour=id), fill=NA)+
+          labs(title=indivName, x ="Longitude", y = "Latitude", color="corridor cluster")+ 
+          theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                panel.background = element_blank(), panel.border = element_rect(colour = "black", fill=NA, size=1))+
+          coord_fixed(xlim = ranges$x_range, ylim = ranges$y_range, expand = T)
       }
-
-      # get the centroid coords for each cluster
-      cent <- matrix(ncol=2, nrow=max(crpts$clust))
-
-      cent <- data.frame(x=NA,y=NA,clusterID=unique(crpts$clust))
-      for(i in unique(crpts$clust)){
-        # gCentroid from the rgeos package
-        cent[cent$clusterID==i,c("x","y")] <- gCentroid(subset(crpts, clust == i))@coords
-      }
-      # compute circles around the centroid coords using "clustDist" radius
-      ci <- circles(cent[,c("x","y")], d=RV$clustDist, lonlat=T,dissolve=F)
-
-      if(!any(burstId(corridorCalc)=="corridor")){## if levels do not contain "corridor"
-        plot(dataSubIndTime, type="b",pch=20,main=paste0("No corridors found - ",namesIndiv(dataSubIndTime))) # change this
-      } else{
-      # plot(dataSubIndTime, type="l")
-      # plot(ci@polygons, add=T)
-      # plot(crpts, col=rainbow(max(crpts$clust))[factor(crpts$clust)], add=T, pch=19)
-      # text(cent[,1],cent[,2],pos=3, labels=paste0("Grp:",1:max(crpts$clust)))
-      # 
-      indDF <- data.frame(long=coordinates(dataSubIndTime)[,1],lat=coordinates(dataSubIndTime)[,2])
-      cifort <- fortify(ci@polygons, region="ID")
       
-      ggplot()+geom_path(data=indDF,aes(long,lat))+
-        geom_point(data=as.data.frame(crpts), aes(segMid_x, segMid_y,color=as.factor(clust)))+
-        geom_polygon(data=cifort, aes(long, lat, group=group),colour='red', fill=NA)+
-        coord_fixed(xlim = ranges$x_range, ylim = ranges$y_range, expand = T)
-}
     })
-    # observeEvent(input$plot_dblclick, {
-    #   brush <- input$plot_brush
-    #   if (!is.null(brush)) {
-    #     ranges$x_range <- c(brush$xmin, brush$xmax)
-    #     ranges$y_range <- c(brush$ymin, brush$ymax)
-    #     
-    #   } else {
-    #     ranges$x_range <- NULL
-    #     ranges$y_range <- NULL
-    #   }
-    # })
-    
-   
   }
-
+  
 }
 
 shinyApp(ui, server)
