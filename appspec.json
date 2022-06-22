@@ -43,6 +43,12 @@
       },
       {
         "name": "shinycssloaders"
+      },
+       {
+        "name": "maptools"
+      },
+       {
+        "name": "circular"
       }
     ]
   },

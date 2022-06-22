@@ -12,6 +12,8 @@ library("stringr")
 library("shinyWidgets")
 library("ggsn")
 library("shinycssloaders")
+library("maptools")
+library("circular")
 
 ## TODO
 # - scale bar that is also zoomable
