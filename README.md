@@ -5,7 +5,7 @@ MoveApps
 Github repository: github.com/movestore/Corridors
 
 ## Description
-This app identifies movement track segments whose attributes suggest corridor use behavior. Currently only visualization posiible!.
+Identification of corridor use behavior based on movement characteristics of the animal. Currently only visualization possible!.
 
 ## Documentation
 This App is embedded in an shiny UI, enabling the user to interactively change the parameters. The corridor identification is based on the movement of the animals, corridors are defined as those areas in the track where movement is fast and parallel (see *"LaPoint et al. (2013) Animal Behavior, Cost-based Corridor Models, and Real Corridors. Landscape Ecology.*" for more information). What is considered as fast and parallel is user defined.
