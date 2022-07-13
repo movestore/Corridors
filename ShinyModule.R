@@ -21,6 +21,7 @@ library("circular")
 # - button to see only corridor segments with and without rest of track
 # - check why all individuals get zoomed in when one is zooomed in
 # - give corridor segments different color
+# add scotts paper as a reference in appsepc
 
 ## https://www.youtube.com/watch?v=gGEY82qA3BI  ##  modules
 ## module shinydashboard site:stackoverflow.com
@@ -47,13 +48,13 @@ shinyModuleUserInterface <- function(id, label) {
   )
 }
 
-shinyModuleConfiguration <- function(id, input) {
-  ns <- NS(id)
-  
-  configuration <- list()
-  
-  configuration
-}
+# shinyModuleConfiguration <- function(id, input) {
+#   ns <- NS(id)
+#   
+#   configuration <- list()
+#   
+#   configuration
+# }
 
 shinyModule <- function(input, output, session, data) {
   ns <- session$ns
