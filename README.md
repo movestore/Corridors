@@ -26,7 +26,7 @@ moveStack in Movebank format
 ### Artefacts
 none
 
-### Parameters
+### Settings
 `Speed`: Proportion of speeds which are high enough to be a valid corridor point (default: speeds that are greater than 75 % of all speeds).
 
 `Parallelism`: Proportion of the circular variances that is low enough to be a valid corridor point. Low values indicate that the segments are (near) parallel (default: variances that are lower than 25 % of all variances).
