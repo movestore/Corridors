@@ -12,10 +12,7 @@
         "name": "shinydashboard"
       },
       {
-        "name": "dashboardthemes"
-      },
-      {
-        "name": "ggplot2"
+        "name": "fresh"
       },
       {
         "name": "shinyBS"
@@ -24,31 +21,16 @@
         "name": "lubridate"
       },
       {
-        "name": "geosphere"
-      },
-      {
-        "name": "dismo"
-      },
-      {
-        "name": "rgeos"
-      },
-      {
         "name": "stringr"
       },
       {
         "name": "shinyWidgets"
       },
       {
-        "name": "ggsn"
-      },
-      {
         "name": "shinycssloaders"
       },
        {
-        "name": "maptools"
-      },
-       {
-        "name": "circular"
+        "name": "leaflet"
       }
     ]
   },
@@ -61,7 +43,9 @@
     "behavior",
     "tracks",
     "shiny",
-    "interactive"
+    "interactive",
+    "map",
+    "visualization"
   ],
   "people": [
     {
@@ -73,6 +57,13 @@
       "orcid": "0000-0002-3357-8533",
       "affiliation": "Max-Planck-Institute of Animal Behavior",
       "affiliationRor": "https://ror.org/026stee22"
+    }
+  ],
+   "references": [
+    {
+	"type": "IsDescribedBy",
+    "note": "LaPoint, S., Gallery, P., Wikelski, M. and Kays, R. (2013), Animal Behavior, Cost-based Corridor Models, and Real Corridors. Landscape Ecology 28, 1615–1630.",
+    "url": " https://doi.org/10.1007/s10980-013-9910-0" 
     }
   ],
   "documentation" : {
