@@ -12,8 +12,8 @@ library("stringr")
 library("shinyWidgets")
 # library("ggsn")
 library("shinycssloaders")
-# library("maptools")
-# library("circular")
+library("maptools")
+library("circular")
 # 
 # 
 library("leaflet")
