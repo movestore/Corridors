@@ -222,7 +222,7 @@ shinyModule <- function(input, output, session, data) {
           dataSubIndTime <- dataSubInd[!duplicated(round_date(timestamps(dataSubInd), paste0(RVupdate$thintime," mins"))),]
         }
         ## calculating corridors and extracting some data for plots
-        corridorCalc <- corridor(x=dataSubIndTime, speedProp=.75, circProp=.25, plot=FALSE)#, minNBsegments = 2)
+        corridorCalc <- corridor(x=dataSubIndTime, speedProp=RVupdate$speedProp, circProp=RVupdate$circProp, plot=FALSE)#, minNBsegments = 2)
         corridorCalc$LocID <- 1:n.locs(corridorCalc)
         indDF <- data.frame(long=coordinates(corridorCalc)[,1],lat=coordinates(corridorCalc)[,2],burstId=c(as.character(burstId(corridorCalc)),NA),LocID=corridorCalc$LocID)
         corrDFr <- which(indDF$burstId%in%c("corridor"))
