@@ -20,10 +20,10 @@ The method is highly sensitive to the length of the segments (i.e. resolution of
 **INTENDED FUTURE ADDITIONS:** *Add the possibility to clean/edit the results ((e.g. remove corridor "outliers" which are obviously not a corridor, select a specific corridor), and possibility to export/download the selected corridors. Add an option to see all tracks on one map. If there is a specific feature that you would find very helpful, please get in touch with me (ascharf@ab.mpg.de) and I will check if it is possible to implement.*
 
 ### Input data
-moveStack in Movebank format
+move2_loc
 
 ### Output data
-moveStack in Movebank format
+move2_loc
 
 ### Artefacts
 none

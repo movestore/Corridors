@@ -1,6 +1,9 @@
 library("shiny")
 library("shinydashboard")
 library("fresh")
+library("move2")
+library("sf")
+# library("dplyr")
 library("move")
 # library("ggplot2")
 library("shinyBS") ## to display message when hovering over input element in UI
@@ -63,11 +66,18 @@ shinyModuleUserInterface <- function(id, label) {
 
 shinyModule <- function(input, output, session, data) {
   ns <- session$ns
-  current <- reactiveVal(data)
+ 
+  # data  <- mutate(data, LocID = 1:nrow(data))
+  # data  <- mutate(data, corridorBehavior = NA)
+  data_out <- reactive(data)
+  # current <- reactiveVal(data)
+  if(st_is_longlat(data)){data <- data}else{data <- st_transform(data,crs="EPSG:4326")}
+  dataMv <- moveStack(to_move(data))
   
-  namesCorresp <- data.frame(nameInd=namesIndiv(data) , tabIndv=str_replace_all(namesIndiv(data), "[^[:alnum:]]", ""))
-  ntabs <- length(namesIndiv(data))
-  tabnames <- str_replace_all(namesIndiv(data), "[^[:alnum:]]", "") #it does not allow punctuation or spaces
+  
+  namesCorresp <- data.frame(nameInd=namesIndiv(dataMv) , tabIndv=str_replace_all(namesIndiv(dataMv), "[^[:alnum:]]", ""))
+  ntabs <- length(namesIndiv(dataMv))
+  tabnames <- str_replace_all(namesIndiv(dataMv), "[^[:alnum:]]", "") #it does not allow punctuation or spaces
   speedPropnames <- paste0(tabnames, '_speedProp') 
   circPropnames <- paste0(tabnames, '_circProp') 
   timeThinnames <- paste0(tabnames, '_timeThin')
@@ -93,7 +103,7 @@ shinyModule <- function(input, output, session, data) {
                              column(3,sliderInput(inputId=ns(circPropnames[i]),label="Parallelism", min=0,max=1, value=0.25, step=0.01),
                                     bsTooltip(id=ns(circPropnames[i]), title="Proportion of the circular variances that is low enough to be a valid corridor point. Low values indicate that the segments are (near) parallel (default: variances that are lower than 25 % of all variances)", placement = "bottom", trigger = "hover", options = list(container = "body"))
                              ), ## maybe change wording to make it simpler: the lower the value, the more parallel are the segments
-                             column(2, numericInput(ns(timeThinnames[i]),"Thin track to X mins",min=0,max=60, value=0, step=1),
+                             column(2, numericInput(ns(timeThinnames[i]),"Thin track to X mins", value=0, step=1),
                                     bsTooltip(id=ns(timeThinnames[i]), title="This is specially recommended for high resolution tracks to ease finding regions with parallel segments. Default (=0) no thinning", placement = "bottom", trigger = "hover", options = list(container = "body"))
                              ),
                              # column(3, numericInput(ns(clustDistnames[i]),"Radius of corridor cluster circles (mts)",value=300),
@@ -124,7 +134,7 @@ shinyModule <- function(input, output, session, data) {
   
   for(i in 1:ntabs){
     output[[plotnames[i]]] <- renderLeaflet({
-      dataSubInd <-  data[[RVtab$indv]]
+      dataSubInd <-  dataMv[[RVtab$indv]]
       if(!input[[paste0(input$sidebarMenuUI, '_updateButton')]]){ ## default plot
         
         dataSubIndTime <- dataSubInd ## no thining by time
@@ -134,6 +144,11 @@ shinyModule <- function(input, output, session, data) {
         corridorCalc$LocID <- 1:n.locs(corridorCalc)
         indDF <- data.frame(long=coordinates(corridorCalc)[,1],lat=coordinates(corridorCalc)[,2],burstId=c(as.character(burstId(corridorCalc)),NA),LocID=corridorCalc$LocID)
         corrDFr <- which(indDF$burstId%in%c("corridor"))
+        # corVec <- indDF$burstId
+        # corVec[corVec%in% "no.corridor"] <- FALSE
+        # corVec[corVec%in% "corridor"] <- TRUE
+        # corVec <- as.logical(corVec)
+        # data_out$corridorBehavior[data_out$LocID%in%corridorCalc$LocID] <- corVec
         
         if(length(corrDFr)<=1){  ## if levels do not contain "corridor" OR if there is only 1 corridor point identified it cannot be clustered and gives an error
           ## to create the text box no corridors found
@@ -219,13 +234,20 @@ shinyModule <- function(input, output, session, data) {
       } else { ## updated plot
         if(RVupdate$thintime==0){dataSubIndTime <- dataSubInd ## no thining by time
         } else {
-          dataSubIndTime <- dataSubInd[!duplicated(round_date(timestamps(dataSubInd), paste0(RVupdate$thintime," mins"))),]
+          dataSubIndTime <- dataSubInd[!duplicated(round_date(timestamps(dataSubInd), paste0(RVupdate$thintime," aminutes"))),]
         }
         ## calculating corridors and extracting some data for plots
         corridorCalc <- corridor(x=dataSubIndTime, speedProp=RVupdate$speedProp, circProp=RVupdate$circProp, plot=FALSE)#, minNBsegments = 2)
         corridorCalc$LocID <- 1:n.locs(corridorCalc)
         indDF <- data.frame(long=coordinates(corridorCalc)[,1],lat=coordinates(corridorCalc)[,2],burstId=c(as.character(burstId(corridorCalc)),NA),LocID=corridorCalc$LocID)
         corrDFr <- which(indDF$burstId%in%c("corridor"))
+        
+        # corVec <- indDF$burstId
+        # corVec[corVec%in% "no.corridor"] <- FALSE
+        # corVec[corVec%in% "corridor"] <- TRUE
+        # corVec <- as.logical(corVec)
+        # data_out$corridorBehavior[data_out$LocID%in%corridorCalc$LocID] <- corVec
+        
         if(length(corrDFr)<=1){  ## if levels do not contain "corridor" OR if there is only 1 corridor point identified it cannot be clustered and gives an error
           ## to create the text box no corridors found
           tag.map.title <- tags$style(HTML(".leaflet-control.map-title {
@@ -281,6 +303,10 @@ shinyModule <- function(input, output, session, data) {
       
     })
   }
-  return(reactive({ current() }))
+  # data <- data %>% select(-c(LocID))
+  # if(all(is.na(data$corridorBehavior))){ data <- data %>% select(-c(corridorBehavior))}
+  # if(all(!(data$corridorBehavior))){data$corridorBehavior <- NULL} # there will always be the last NA of track...
+  # data_out <- reactive(data)
+  return(data_out)
 }
 

@@ -6,6 +6,9 @@
         "name": "move"
       },
       {
+        "name": "move2"
+      },
+      {
         "name": "shiny"
       },
       {
@@ -37,6 +40,9 @@
       },
        {
         "name": "circular"
+      },
+       {
+        "name": "sf"
       }
     ]
   },
