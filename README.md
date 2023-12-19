@@ -15,9 +15,11 @@ Interpretation caution: the method sometimes identifies segments as corridors th
 
 The method is highly sensitive to the length of the segments (i.e. resolution of the data). If the data have a high fix rate, with many short segments, finding parallel segments will be rather difficult. Therefore it is recommended to thin the track to a lower fix rate to ease finding regions with parallel segments.
 
+**CAUTION:** Calculations can take long. The higher the number of tracks, and higher the number of locations, the longer it takes to calculate. Every time you click on a tab ("allTracks", or single tracks) the calculation starts from scratch. Be patient and the results will be showed when the calculation is done.
+
 **NOTE:** *Currently this app is only for visual inspection. The results do not get passed along to the next up. The input data will be passed on without modification.*
 
-**INTENDED FUTURE ADDITIONS:** *Add the possibility to clean/edit the results ((e.g. remove corridor "outliers" which are obviously not a corridor, select a specific corridor), and possibility to export/download the selected corridors. Add an option to see all tracks on one map. If there is a specific feature that you would find very helpful, please get in touch with me (ascharf@ab.mpg.de) or make an issue on the github of the app and I will check if it is possible to implement.*
+**INTENDED FUTURE ADDITIONS:** *Add the possibility to clean/edit the results ((e.g. remove corridor "outliers" which are obviously not a corridor, select a specific corridor), and possibility to export/download the selected corridors. If there is a specific feature that you would find very helpful, please get in touch with me (ascharf@ab.mpg.de) or make an issue on the github of the App and I will check if it is possible to implement.*
 
 ### Input data
 move2_loc

@@ -40,7 +40,7 @@ shinyModuleUserInterface <- function(id, label) {
   
   tagList(
     dashboardPage(
-      dashboardHeader(title = "Corridors per individual",titleWidth=300),
+      dashboardHeader(title = "Corridors per track",titleWidth=300),
       dashboardSidebar(uiOutput(ns("SidebarUI")),
                        tags$style( ## to make a vertical scroll bar on the sidebar so all tabs can be accessed while seeing the main panel
                          "#sidebarItemExpanded {
