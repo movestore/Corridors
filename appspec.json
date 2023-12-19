@@ -1,9 +1,13 @@
 {
+  "version":"1.1",
   "settings":[],
   "dependencies": {
     "R": [
       {
         "name": "move"
+      },
+      {
+        "name": "move2"
       },
       {
         "name": "shiny"
@@ -37,6 +41,9 @@
       },
        {
         "name": "circular"
+      },
+       {
+        "name": "sf"
       }
     ]
   },
@@ -71,8 +78,5 @@
     "note": "LaPoint, S., Gallery, P., Wikelski, M. and Kays, R. (2013), Animal Behavior, Cost-based Corridor Models, and Real Corridors. Landscape Ecology 28, 1615–1630.",
     "url": " https://doi.org/10.1007/s10980-013-9910-0" 
     }
-  ],
-  "documentation" : {
-    "url": "https://github.com/movestore/Corridors/blob/master/README.md"
-  }
+  ]
 }

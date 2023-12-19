@@ -1,6 +1,9 @@
 library("shiny")
 library("shinydashboard")
 library("fresh")
+library("move2")
+library("sf")
+# library("dplyr")
 library("move")
 # library("ggplot2")
 library("shinyBS") ## to display message when hovering over input element in UI
@@ -22,9 +25,11 @@ library("leaflet")
 # library(dplyr)
 
 ## TODO
+# - when app to change track id exists, add it to readme
+# - adjust height of panel
+# - add message to please make github issue for useful options
 # - make un-/selection of corridors possible, or at least by number of segments
 # - make it possible to save the selected corridors within the object
-# - make it posible to see all track on one map
 
 ## https://www.youtube.com/watch?v=gGEY82qA3BI  ##  modules
 ## module shinydashboard site:stackoverflow.com
@@ -43,19 +48,14 @@ shinyModuleUserInterface <- function(id, label) {
                       height: calc(100vh - 50px) !important;
                      }")),
       dashboardBody(uiOutput(ns("TabUI")),
-                    use_theme(create_theme(
-                      adminlte_color(
-                        light_blue = "#46505a"
-                      ),
-                      adminlte_sidebar(
-                        width = "300px",
-                        dark_bg = "#343e48",
-                        dark_hover_bg = "#2879ca",
-                        dark_color = "#e1eaf2"
-                      ),
-                      adminlte_global(
-                        content_bg = "#dfe7ef"
-                      )))
+                    # tags$head(tags$style("#TabUI{height:65vh !important;}")),
+                    use_theme(
+                      create_theme(
+                        adminlte_color(light_blue = "#46505a"),
+                        adminlte_sidebar(width = "300px",dark_bg = "#343e48",dark_hover_bg = "#2879ca",dark_color = "#e1eaf2"),
+                        adminlte_global(content_bg = "#dfe7ef")
+                      )
+                    )
       )
     )
   )
@@ -63,11 +63,23 @@ shinyModuleUserInterface <- function(id, label) {
 
 shinyModule <- function(input, output, session, data) {
   ns <- session$ns
-  current <- reactiveVal(data)
   
-  namesCorresp <- data.frame(nameInd=namesIndiv(data) , tabIndv=str_replace_all(namesIndiv(data), "[^[:alnum:]]", ""))
-  ntabs <- length(namesIndiv(data))
-  tabnames <- str_replace_all(namesIndiv(data), "[^[:alnum:]]", "") #it does not allow punctuation or spaces
+  #####################
+  ### transform data ##
+  #####################
+  # data  <- mutate(data, LocID = 1:nrow(data))
+  # data  <- mutate(data, corridorBehavior = NA)
+  data_out <- reactive(data)
+  # current <- reactiveVal(data)
+  if(st_is_longlat(data)){data <- data}else{data <- st_transform(data,crs="EPSG:4326")}
+  dataMv <- moveStack(to_move(data))
+  
+  #################
+  ### tab naming ##
+  #################
+  namesCorresp <- data.frame(nameInd=c("AllTracks",namesIndiv(dataMv)) , tabIndv=c("AllTracks",str_replace_all(namesIndiv(dataMv), "[^[:alnum:]]", "")))
+  ntabs <- length(namesIndiv(dataMv))+1
+  tabnames <- c("AllTracks",str_replace_all(namesIndiv(dataMv), "[^[:alnum:]]", "")) #it does not allow punctuation or spaces
   speedPropnames <- paste0(tabnames, '_speedProp') 
   circPropnames <- paste0(tabnames, '_circProp') 
   timeThinnames <- paste0(tabnames, '_timeThin')
@@ -75,7 +87,9 @@ shinyModule <- function(input, output, session, data) {
   updateButton <- paste0(tabnames,'_updateButton')
   plotnames <- paste0("plot_",tabnames) 
   
-  
+  ###################
+  ### tab creation ##
+  ###################
   output$SidebarUI <- renderUI({
     Menus <- vector("list", ntabs)
     for(i in 1:ntabs){
@@ -83,6 +97,9 @@ shinyModule <- function(input, output, session, data) {
     do.call(function(...) sidebarMenu(id = ns('sidebarMenuUI'),...), Menus)
   })
   
+  ##############################
+  ### interactive UI creation ##
+  ##############################
   output$TabUI <- renderUI({
     Tabs <- vector("list", ntabs)
     for(i in 1:ntabs){
@@ -91,11 +108,9 @@ shinyModule <- function(input, output, session, data) {
                              column(3,sliderInput(inputId=ns(speedPropnames[i]),label="Speed", min=0,max=1, value=0.75, step=0.01),
                                     bsTooltip(id=ns(speedPropnames[i]), title="Proportion of speeds which are high enough to be a valid corridor point (default: speeds that are greater than 75 % of all speeds)", placement = "bottom", trigger = "hover", options = list(container = "body"))),
                              column(3,sliderInput(inputId=ns(circPropnames[i]),label="Parallelism", min=0,max=1, value=0.25, step=0.01),
-                                    bsTooltip(id=ns(circPropnames[i]), title="Proportion of the circular variances that is low enough to be a valid corridor point. Low values indicate that the segments are (near) parallel (default: variances that are lower than 25 % of all variances)", placement = "bottom", trigger = "hover", options = list(container = "body"))
-                             ), ## maybe change wording to make it simpler: the lower the value, the more parallel are the segments
-                             column(2, numericInput(ns(timeThinnames[i]),"Thin track to X mins",min=0,max=60, value=0, step=1),
-                                    bsTooltip(id=ns(timeThinnames[i]), title="This is specially recommended for high resolution tracks to ease finding regions with parallel segments. Default (=0) no thinning", placement = "bottom", trigger = "hover", options = list(container = "body"))
-                             ),
+                                    bsTooltip(id=ns(circPropnames[i]), title="Proportion of the circular variances that is low enough to be a valid corridor point. Low values indicate that the segments are (near) parallel (default: variances that are lower than 25 % of all variances)", placement = "bottom", trigger = "hover", options = list(container = "body"))), ## maybe change wording to make it simpler: the lower the value, the more parallel are the segments
+                             column(2, numericInput(ns(timeThinnames[i]),"Thin track to X mins", value=0, step=1),
+                                    bsTooltip(id=ns(timeThinnames[i]), title="This is specially recommended for high resolution tracks to ease finding regions with parallel segments. Default (=0) no thinning", placement = "bottom", trigger = "hover", options = list(container = "body"))),
                              # column(3, numericInput(ns(clustDistnames[i]),"Radius of corridor cluster circles (mts)",value=300),
                              #        bsTooltip(id=ns(clustDistnames[i]), title="All identified corridor segments that fall within a circle will be grouped as a corridor cluster", placement = "bottom", trigger = "hover", options = list(container = "body"))
                              #        ),
@@ -107,9 +122,11 @@ shinyModule <- function(input, output, session, data) {
     do.call(tabItems, Tabs)
   })
   
+  ##############################
+  ### get input values for UI ##
+  ##############################
   ## get input values for each tab
   RVtab <- reactiveValues()
-  
   observe({
     RVtab$indv <- namesCorresp$nameInd[namesCorresp$tabIndv==input$sidebarMenuUI]
   })
@@ -122,22 +139,33 @@ shinyModule <- function(input, output, session, data) {
     # RVupdate$clustDist <- input[[paste0(input$sidebarMenuUI, '_clustDist')]]
   })
   
+  ##############################
+  ### corridor calculation ##
+  ##############################
   for(i in 1:ntabs){
-    output[[plotnames[i]]] <- renderLeaflet({
-      dataSubInd <-  data[[RVtab$indv]]
-      if(!input[[paste0(input$sidebarMenuUI, '_updateButton')]]){ ## default plot
-        
-        dataSubIndTime <- dataSubInd ## no thining by time
-        
-        ## calculating corridors and extracting some data for plots
-        corridorCalc <- corridor(x=dataSubIndTime, speedProp=.75, circProp=.25, plot=FALSE)#, minNBsegments = 4)
-        corridorCalc$LocID <- 1:n.locs(corridorCalc)
-        indDF <- data.frame(long=coordinates(corridorCalc)[,1],lat=coordinates(corridorCalc)[,2],burstId=c(as.character(burstId(corridorCalc)),NA),LocID=corridorCalc$LocID)
-        corrDFr <- which(indDF$burstId%in%c("corridor"))
-        
-        if(length(corrDFr)<=1){  ## if levels do not contain "corridor" OR if there is only 1 corridor point identified it cannot be clustered and gives an error
-          ## to create the text box no corridors found
-          tag.map.title <- tags$style(HTML(".leaflet-control.map-title {
+    ##################################
+    ### default plot all individuals ##
+    ##################################
+    if(i==1){
+      output[[plotnames[i]]] <- renderLeaflet({
+        if(!input[[paste0(input$sidebarMenuUI, '_updateButton')]]){
+          dataMvSubTime <- dataMv ## no thining by time
+          corrDF_L <- lapply(split(dataMvSubTime), function(y){
+            corridorCalc <- corridor(x=y, speedProp=.75, circProp=.25, plot=FALSE)#, minNBsegments = 4)
+            # corridorCalc <- corridor(x=dataSubIndTime, speedProp=RVupdate$speedProp, circProp=RVupdate$circProp, plot=FALSE)#, minNBsegments = 2)
+            corridorCalc$LocID <- 1:n.locs(corridorCalc)
+            indDF <- data.frame(long=coordinates(corridorCalc)[,1],lat=coordinates(corridorCalc)[,2],burstId=c(as.character(burstId(corridorCalc)),NA),LocID=corridorCalc$LocID, indiv=namesIndiv(corridorCalc))
+            return(indDF)
+          })
+          corrDF <- do.call("rbind",corrDF_L)
+          corrYorN <- which(corrDF$burstId%in%c("corridor"))
+          
+          ##################################################
+          ### default plot all individuals -- NO corridors ##
+          ##################################################
+          if(length(corrYorN)<=1){  ## if levels do not contain "corridor" OR if there is only 1 corridor point identified it cannot be clustered and gives an error
+            ## to create the text box no corridors found
+            tag.map.title <- tags$style(HTML(".leaflet-control.map-title {
           transform: translate(-50%,20%);
           position: fixed !important;
           left: 50%;
@@ -149,86 +177,87 @@ shinyModule <- function(input, output, session, data) {
           font-size: 28px;
           color: black;
           }"))
-          title <- tags$div(
-            tag.map.title, HTML("No corridors found")
-          )  
-          
-          map1 <- leaflet(corridorCalc) %>% addTiles()%>%
-            addProviderTiles("Esri.WorldTopoMap", group = "TopoMap") %>%
-            addProviderTiles("Esri.WorldImagery", group = "Aerial") %>% 
-            addPolylines(lng = coordinates(corridorCalc)[,1],lat = coordinates(corridorCalc)[,2],weight=2, opacity=0.7, layerId=namesIndiv(corridorCalc),group =namesIndiv(corridorCalc))
-          map1 %>%
-            addControl(title, position = "topleft", className="map-title") %>% # to add the ext box of corridors not found
-            addScaleBar(position="bottomright",
-                        options=scaleBarOptions(maxWidth = 100, metric = TRUE, imperial = FALSE, updateWhenIdle = TRUE)) %>%
-            addLayersControl(
-              baseGroups = c("TopoMap","Aerial"),
-              # overlayGroups = c("indiv","corr"),
-              options = layersControlOptions(collapsed = FALSE))
-          
-        } else { ## there are corridors found
-          
-          ### FIND A WAY TO SELECT/UNSELECT CORRIDORS
-          # corridor segment midpoints
-          # midCrPts <- corridorCalc@data[burstId(corridorCalc)=="corridor",c("segMid_x","segMid_y","LocID")]
-          # coordinates(midCrPts) <- ~segMid_x+segMid_y
-          # projection(midCrPts) <- projection(dataSubIndTime)
-          # ## distance matrix
-          # dist <- distm(midCrPts, fun=distGeo)
-          # ## clustering
-          # hc <- hclust(as.dist(dist), method="single") # complete single
-          # # define clusters based on a tree "height" cutoff distance (distance between corridor clusters) and add them to the SpDataFrame
-          # midCrPts$clusterID <- cutree(hc, h=300) # h=RVupdate$clustDist
-          # # add nb of corridor segments per cluster to SpDataFrame
-          # tbCount <- data.frame(table(midCrPts$clusterID))
-          # midCrPts$nbCorrInClust <- NA
-          # for(j in tbCount$Var1){
-          #   midCrPts$nbCorrInClust[midCrPts$clusterID==j] <- tbCount$Freq[tbCount$Var1==j]
-          # }
-          # #HERE##### make here clusters selecable, unselectable, remove those with lesss than X points, etc
-          # midCrPts <- midCrPts[midCrPts$nbCorrInClust>1,]
-          # 
-          # # get the centroid coords for each cluster
-          # centClust <- matrix(ncol=2, nrow=max(midCrPts$clusterID))
-          # centClust <- data.frame(x=NA,y=NA,clusterID=unique(midCrPts$clusterID))
-          # for(i in unique(midCrPts$clusterID)){
-          #   centClust[centClust$clusterID==i,c("x","y")] <- gCentroid(subset(midCrPts, clusterID == i))@coords
-          # }
-          # 
-          # indDF <- merge(indDF, midCrPts@data, by="LocID", all.x=T)
-          # corrDFr <- which(indDF$burstId%in%c("corridor"))
-          
-          map1 <- leaflet(corridorCalc) %>% addTiles()%>%
-            addProviderTiles("Esri.WorldTopoMap", group = "TopoMap") %>%
-            addProviderTiles("Esri.WorldImagery", group = "Aerial") %>% 
-            addPolylines(lng = coordinates(corridorCalc)[,1],lat = coordinates(corridorCalc)[,2],weight=2, opacity=0.7, layerId=namesIndiv(corridorCalc),group ="track")
-          for(n in corrDFr){
-            map1 <- map1 %>%
-              addPolylines(data=indDF[n:(n+1),],lng=~long,lat=~lat, color="red",weight = 6,opacity = 0.7, group="potential corridors")
+            title <- tags$div(
+              tag.map.title, HTML("No corridors found")
+            ) 
+            
+            ind <- unique(corrDF$indiv)
+            
+            map1 <- leaflet(corrDF) %>% addTiles()%>%
+              addProviderTiles("Esri.WorldTopoMap", group = "TopoMap") %>%
+              addProviderTiles("Esri.WorldImagery", group = "Aerial") #%>% 
+            for(x in seq_along(ind)){
+              i <- ind[x]
+              corrDFInd <- corrDF[corrDF$indiv==i,]
+              corrDFr <- which(corrDFInd$burstId%in%c("corridor"))
+              map1 <- map1 %>%
+                addPolylines(lng = corrDFInd$long,lat = corrDFInd$lat,weight=2, opacity=0.8, layerId=i,group=i, color="black")
+            }
+            map1 %>%
+              addControl(title, position = "topleft", className="map-title") %>% # to add the ext box of corridors not found
+              addScaleBar(position="bottomright",
+                          options=scaleBarOptions(maxWidth = 100, metric = TRUE, imperial = FALSE, updateWhenIdle = TRUE)) %>%
+              addLayersControl(
+                baseGroups = c("TopoMap","Aerial"),
+                # overlayGroups = c("indiv","corr"),
+                options = layersControlOptions(collapsed = FALSE))
+            
+          } else { ## there are corridors found
+            ####################################################
+            ### default plot all individuals -- with corridors ##
+            ####################################################
+            
+            ind <- unique(corrDF$indiv)
+            cols <- rainbow(n=length(ind))
+            
+            map1 <- leaflet(corrDF) %>% addTiles()%>%
+              addProviderTiles("Esri.WorldTopoMap", group = "TopoMap") %>%
+              addProviderTiles("Esri.WorldImagery", group = "Aerial") #%>% 
+            for(x in seq_along(ind)){
+              i <- ind[x]
+              corrDFInd <- corrDF[corrDF$indiv==i,]
+              corrDFr <- which(corrDFInd$burstId%in%c("corridor"))
+              map1 <- map1 %>%
+                addPolylines(lng = corrDFInd$long,lat = corrDFInd$lat,weight=2, opacity=0.8, layerId=i,group=i, color="black")
+              for(n in corrDFr){
+                map1 <- map1 %>%
+                  addPolylines(data=corrDFInd[n:(n+1),],lng=~long,lat=~lat, color=cols[x],weight = 6,opacity = 0.7, group=paste0("potential corridors-",i))
+              }
+            }
+            map1 %>% 
+              # addCircles(data=centClust, lng=~x, lat=~y, group=~clusterID, radius=medSegleng*2, color="red") %>%
+              addScaleBar(position="bottomright",
+                          options=scaleBarOptions(maxWidth = 100, metric = TRUE, imperial = FALSE, updateWhenIdle = TRUE)) %>%
+              addLayersControl(
+                baseGroups = c("TopoMap","Aerial"),
+                # overlayGroups = centClust$clusterID,
+                overlayGroups = c(corrDF$indiv,paste0("potential corridors-",corrDF$indiv)),
+                options = layersControlOptions(collapsed = FALSE)) 
           }
-          map1 %>% 
-            # addCircles(data=centClust, lng=~x, lat=~y, group=~clusterID, radius=300, color="red") %>% #radius=RVupdate$clustDist
-            addScaleBar(position="bottomright",
-                        options=scaleBarOptions(maxWidth = 100, metric = TRUE, imperial = FALSE, updateWhenIdle = TRUE)) %>%
-            addLayersControl(
-              baseGroups = c("TopoMap","Aerial"),
-              # overlayGroups = centClust$clusterID,
-              overlayGroups = c("track","potential corridors"),
-              options = layersControlOptions(collapsed = FALSE)) 
-        }
-      } else { ## updated plot
-        if(RVupdate$thintime==0){dataSubIndTime <- dataSubInd ## no thining by time
-        } else {
-          dataSubIndTime <- dataSubInd[!duplicated(round_date(timestamps(dataSubInd), paste0(RVupdate$thintime," mins"))),]
-        }
-        ## calculating corridors and extracting some data for plots
-        corridorCalc <- corridor(x=dataSubIndTime, speedProp=RVupdate$speedProp, circProp=RVupdate$circProp, plot=FALSE)#, minNBsegments = 2)
-        corridorCalc$LocID <- 1:n.locs(corridorCalc)
-        indDF <- data.frame(long=coordinates(corridorCalc)[,1],lat=coordinates(corridorCalc)[,2],burstId=c(as.character(burstId(corridorCalc)),NA),LocID=corridorCalc$LocID)
-        corrDFr <- which(indDF$burstId%in%c("corridor"))
-        if(length(corrDFr)<=1){  ## if levels do not contain "corridor" OR if there is only 1 corridor point identified it cannot be clustered and gives an error
-          ## to create the text box no corridors found
-          tag.map.title <- tags$style(HTML(".leaflet-control.map-title {
+        }else { ## updated plot
+          ##################################
+          ### updated plot all individuals ##
+          ##################################
+          dataMvSubTime <- dataMv ## no thining by time
+          if(RVupdate$thintime==0){dataMvSubTime <- dataMv ## no thining by time
+          } else {
+            dataMvSubTime <- dataMv[!duplicated(paste0(dataMv@trackId,round_date(timestamps(dataMv), paste0(RVupdate$thintime," aminutes")))),]
+          }
+          corrDF_L <- lapply(split(dataMvSubTime), function(y){
+            corridorCalc <- corridor(x=y, speedProp=RVupdate$speedProp, circProp=RVupdate$circProp, plot=FALSE)#, minNBsegments = 4)
+            corridorCalc$LocID <- 1:n.locs(corridorCalc)
+            indDF <- data.frame(long=coordinates(corridorCalc)[,1],lat=coordinates(corridorCalc)[,2],burstId=c(as.character(burstId(corridorCalc)),NA),LocID=corridorCalc$LocID, indiv=namesIndiv(corridorCalc))
+            return(indDF)
+          })
+          corrDF <- do.call("rbind",corrDF_L)
+          corrYorN <- which(corrDF$burstId%in%c("corridor"))
+          
+          ##################################################
+          ### updated plot all individuals -- NO corridors ##
+          ##################################################
+          if(length(corrYorN)<=1){  ## if levels do not contain "corridor" OR if there is only 1 corridor point identified it cannot be clustered and gives an error
+            ## to create the text box no corridors found
+            tag.map.title <- tags$style(HTML(".leaflet-control.map-title {
           transform: translate(-50%,20%);
           position: fixed !important;
           left: 50%;
@@ -240,47 +269,259 @@ shinyModule <- function(input, output, session, data) {
           font-size: 28px;
           color: black;
           }"))
-          title <- tags$div(
-            tag.map.title, HTML("No corridors found")
-          )  
-          
-          map1 <- leaflet(corridorCalc) %>% addTiles()%>%
-            addProviderTiles("Esri.WorldTopoMap", group = "TopoMap") %>%
-            addProviderTiles("Esri.WorldImagery", group = "Aerial") %>% 
-            addPolylines(lng = coordinates(corridorCalc)[,1],lat = coordinates(corridorCalc)[,2],weight=2, opacity=0.7, layerId=namesIndiv(corridorCalc),group =namesIndiv(corridorCalc))
-          map1 %>%
-            addControl(title, position = "topleft", className="map-title") %>% # to add the ext box of corridors not found
-            addScaleBar(position="bottomright",
-                        options=scaleBarOptions(maxWidth = 100, metric = TRUE, imperial = FALSE, updateWhenIdle = TRUE)) %>%
-            addLayersControl(
-              baseGroups = c("TopoMap","Aerial"),
-              # overlayGroups = c("indiv","corr"),
-              options = layersControlOptions(collapsed = FALSE))
-          
-        } else { # corridors found
-          ## include here as above how to select/unselec corridors when found out how to do that
-          map1 <- leaflet(corridorCalc) %>% addTiles()%>%
-            addProviderTiles("Esri.WorldTopoMap", group = "TopoMap") %>%
-            addProviderTiles("Esri.WorldImagery", group = "Aerial") %>% 
-            addPolylines(lng = coordinates(corridorCalc)[,1],lat = coordinates(corridorCalc)[,2],weight=2, opacity=0.7, layerId=namesIndiv(corridorCalc),group ="track")
-          for(n in corrDFr){
-            map1 <- map1 %>%
-              addPolylines(data=indDF[n:(n+1),],lng=~long,lat=~lat, color="red",weight = 6,opacity = 0.7, group="potential corridors")
+            title <- tags$div(
+              tag.map.title, HTML("No corridors found")
+            )  
+            
+            ind <- unique(corrDF$indiv)
+            
+            map1 <- leaflet(corrDF) %>% addTiles()%>%
+              addProviderTiles("Esri.WorldTopoMap", group = "TopoMap") %>%
+              addProviderTiles("Esri.WorldImagery", group = "Aerial") #%>% 
+            for(x in seq_along(ind)){
+              i <- ind[x]
+              corrDFInd <- corrDF[corrDF$indiv==i,]
+              corrDFr <- which(corrDFInd$burstId%in%c("corridor"))
+              map1 <- map1 %>%
+                addPolylines(lng = corrDFInd$long,lat = corrDFInd$lat,weight=2, opacity=0.8, layerId=i,group=i, color="black")
+            }
+            map1 %>%
+              addControl(title, position = "topleft", className="map-title") %>% # to add the ext box of corridors not found
+              addScaleBar(position="bottomright",
+                          options=scaleBarOptions(maxWidth = 100, metric = TRUE, imperial = FALSE, updateWhenIdle = TRUE)) %>%
+              addLayersControl(
+                baseGroups = c("TopoMap","Aerial"),
+                # overlayGroups = c("indiv","corr"),
+                options = layersControlOptions(collapsed = FALSE))
+            
+          } else { ## there are corridors found
+            ####################################################
+            ### updated plot all individuals -- with corridors ##
+            ####################################################
+            
+            ind <- unique(corrDF$indiv)
+            cols <- rainbow(n=length(ind))
+            
+            map1 <- leaflet(corrDF) %>% addTiles()%>%
+              addProviderTiles("Esri.WorldTopoMap", group = "TopoMap") %>%
+              addProviderTiles("Esri.WorldImagery", group = "Aerial") #%>% 
+            for(x in seq_along(ind)){
+              i <- ind[x]
+              corrDFInd <- corrDF[corrDF$indiv==i,]
+              corrDFr <- which(corrDFInd$burstId%in%c("corridor"))
+              map1 <- map1 %>%
+                addPolylines(lng = corrDFInd$long,lat = corrDFInd$lat,weight=2, opacity=0.8, layerId=i,group=i, color="black")
+              for(n in corrDFr){
+                map1 <- map1 %>%
+                  addPolylines(data=corrDFInd[n:(n+1),],lng=~long,lat=~lat, color=cols[x],weight = 6,opacity = 0.7, group=paste0("potential corridors-",i))
+              }
+            }
+            map1 %>% 
+              # addCircles(data=centClust, lng=~x, lat=~y, group=~clusterID, radius=medSegleng*2, color="red") %>%
+              addScaleBar(position="bottomright",
+                          options=scaleBarOptions(maxWidth = 100, metric = TRUE, imperial = FALSE, updateWhenIdle = TRUE)) %>%
+              addLayersControl(
+                baseGroups = c("TopoMap","Aerial"),
+                # overlayGroups = centClust$clusterID,
+                overlayGroups = c(corrDF$indiv,paste0("potential corridors-",corrDF$indiv)),
+                options = layersControlOptions(collapsed = FALSE)) 
           }
-          map1 %>% 
-            # addCircles(data=centClust, lng=~x, lat=~y, group=~clusterID, radius=medSegleng*2, color="red") %>%
-            addScaleBar(position="bottomright",
-                        options=scaleBarOptions(maxWidth = 100, metric = TRUE, imperial = FALSE, updateWhenIdle = TRUE)) %>%
-            addLayersControl(
-              baseGroups = c("TopoMap","Aerial"),
-              # overlayGroups = centClust$clusterID,
-              overlayGroups = c("track","potential corridors"),
-              options = layersControlOptions(collapsed = FALSE)) 
         }
-      }
-      
-    })
+      })
+    }else{
+      ##################################
+      ### default plot per individual ##
+      ##################################
+      output[[plotnames[i]]] <- renderLeaflet({
+        dataSubInd <-  dataMv[[RVtab$indv]]
+        if(!input[[paste0(input$sidebarMenuUI, '_updateButton')]]){ ## default plot
+          
+          dataSubIndTime <- dataSubInd ## no thining by time
+          
+          ## calculating corridors and extracting some data for plots
+          corridorCalc <- corridor(x=dataSubIndTime, speedProp=.75, circProp=.25, plot=FALSE)#, minNBsegments = 4)
+          corridorCalc$LocID <- 1:n.locs(corridorCalc)
+          indDF <- data.frame(long=coordinates(corridorCalc)[,1],lat=coordinates(corridorCalc)[,2],burstId=c(as.character(burstId(corridorCalc)),NA),LocID=corridorCalc$LocID)
+          corrDFr <- which(indDF$burstId%in%c("corridor"))
+          # corVec <- indDF$burstId
+          # corVec[corVec%in% "no.corridor"] <- FALSE
+          # corVec[corVec%in% "corridor"] <- TRUE
+          # corVec <- as.logical(corVec)
+          # data_out$corridorBehavior[data_out$LocID%in%corridorCalc$LocID] <- corVec
+          
+          ######################################################
+          ### default plot per individual -- with no corridors ##
+          ######################################################
+          if(length(corrDFr)<=1){  ## if levels do not contain "corridor" OR if there is only 1 corridor point identified it cannot be clustered and gives an error
+            ## to create the text box no corridors found
+            tag.map.title <- tags$style(HTML(".leaflet-control.map-title {
+          transform: translate(-50%,20%);
+          position: fixed !important;
+          left: 50%;
+          text-align: center;
+          padding-left: 10px; 
+          padding-right: 10px; 
+          background: rgba(255,255,255,0.75);
+          font-weight: bold;
+          font-size: 28px;
+          color: black;
+          }"))
+            title <- tags$div(
+              tag.map.title, HTML("No corridors found")
+            )  
+            
+            map1 <- leaflet(corridorCalc) %>% addTiles()%>%
+              addProviderTiles("Esri.WorldTopoMap", group = "TopoMap") %>%
+              addProviderTiles("Esri.WorldImagery", group = "Aerial") %>% 
+              addPolylines(lng = coordinates(corridorCalc)[,1],lat = coordinates(corridorCalc)[,2],weight=2, opacity=0.7, layerId=namesIndiv(corridorCalc),group =namesIndiv(corridorCalc))
+            map1 %>%
+              addControl(title, position = "topleft", className="map-title") %>% # to add the ext box of corridors not found
+              addScaleBar(position="bottomright",
+                          options=scaleBarOptions(maxWidth = 100, metric = TRUE, imperial = FALSE, updateWhenIdle = TRUE)) %>%
+              addLayersControl(
+                baseGroups = c("TopoMap","Aerial"),
+                # overlayGroups = c("indiv","corr"),
+                options = layersControlOptions(collapsed = FALSE))
+            
+          } else { ## there are corridors found
+            ######################################################
+            ### default plot per individual -- with corridors ##
+            ######################################################
+            
+            ### FIND A WAY TO SELECT/UNSELECT CORRIDORS
+            # corridor segment midpoints
+            # midCrPts <- corridorCalc@data[burstId(corridorCalc)=="corridor",c("segMid_x","segMid_y","LocID")]
+            # coordinates(midCrPts) <- ~segMid_x+segMid_y
+            # projection(midCrPts) <- projection(dataSubIndTime)
+            # ## distance matrix
+            # dist <- distm(midCrPts, fun=distGeo)
+            # ## clustering
+            # hc <- hclust(as.dist(dist), method="single") # complete single
+            # # define clusters based on a tree "height" cutoff distance (distance between corridor clusters) and add them to the SpDataFrame
+            # midCrPts$clusterID <- cutree(hc, h=300) # h=RVupdate$clustDist
+            # # add nb of corridor segments per cluster to SpDataFrame
+            # tbCount <- data.frame(table(midCrPts$clusterID))
+            # midCrPts$nbCorrInClust <- NA
+            # for(j in tbCount$Var1){
+            #   midCrPts$nbCorrInClust[midCrPts$clusterID==j] <- tbCount$Freq[tbCount$Var1==j]
+            # }
+            # #HERE##### make here clusters selecable, unselectable, remove those with lesss than X points, etc
+            # midCrPts <- midCrPts[midCrPts$nbCorrInClust>1,]
+            # 
+            # # get the centroid coords for each cluster
+            # centClust <- matrix(ncol=2, nrow=max(midCrPts$clusterID))
+            # centClust <- data.frame(x=NA,y=NA,clusterID=unique(midCrPts$clusterID))
+            # for(i in unique(midCrPts$clusterID)){
+            #   centClust[centClust$clusterID==i,c("x","y")] <- gCentroid(subset(midCrPts, clusterID == i))@coords
+            # }
+            # 
+            # indDF <- merge(indDF, midCrPts@data, by="LocID", all.x=T)
+            # corrDFr <- which(indDF$burstId%in%c("corridor"))
+            
+            map1 <- leaflet(corridorCalc) %>% addTiles()%>%
+              addProviderTiles("Esri.WorldTopoMap", group = "TopoMap") %>%
+              addProviderTiles("Esri.WorldImagery", group = "Aerial") %>% 
+              addPolylines(lng = coordinates(corridorCalc)[,1],lat = coordinates(corridorCalc)[,2],weight=2, opacity=0.7, layerId=namesIndiv(corridorCalc),group ="track")
+            for(n in corrDFr){
+              map1 <- map1 %>%
+                addPolylines(data=indDF[n:(n+1),],lng=~long,lat=~lat, color="red",weight = 6,opacity = 0.7, group="potential corridors")
+            }
+            map1 %>% 
+              # addCircles(data=centClust, lng=~x, lat=~y, group=~clusterID, radius=300, color="red") %>% #radius=RVupdate$clustDist
+              addScaleBar(position="bottomright",
+                          options=scaleBarOptions(maxWidth = 100, metric = TRUE, imperial = FALSE, updateWhenIdle = TRUE)) %>%
+              addLayersControl(
+                baseGroups = c("TopoMap","Aerial"),
+                # overlayGroups = centClust$clusterID,
+                overlayGroups = c("track","potential corridors"),
+                options = layersControlOptions(collapsed = FALSE)) 
+          }
+        } else { ## updated plot
+          ##################################
+          ### updated plot per individual ##
+          ##################################
+          
+          if(RVupdate$thintime==0){dataSubIndTime <- dataSubInd ## no thining by time
+          } else {
+            dataSubIndTime <- dataSubInd[!duplicated(round_date(timestamps(dataSubInd), paste0(RVupdate$thintime," aminutes"))),]
+          }
+          ## calculating corridors and extracting some data for plots
+          corridorCalc <- corridor(x=dataSubIndTime, speedProp=RVupdate$speedProp, circProp=RVupdate$circProp, plot=FALSE)#, minNBsegments = 2)
+          corridorCalc$LocID <- 1:n.locs(corridorCalc)
+          indDF <- data.frame(long=coordinates(corridorCalc)[,1],lat=coordinates(corridorCalc)[,2],burstId=c(as.character(burstId(corridorCalc)),NA),LocID=corridorCalc$LocID)
+          corrDFr <- which(indDF$burstId%in%c("corridor"))
+          
+          # corVec <- indDF$burstId
+          # corVec[corVec%in% "no.corridor"] <- FALSE
+          # corVec[corVec%in% "corridor"] <- TRUE
+          # corVec <- as.logical(corVec)
+          # data_out$corridorBehavior[data_out$LocID%in%corridorCalc$LocID] <- corVec
+          
+          ######################################################
+          ### updated plot per individual -- with NO corridors ##
+          ######################################################
+          if(length(corrDFr)<=1){  ## if levels do not contain "corridor" OR if there is only 1 corridor point identified it cannot be clustered and gives an error
+            ## to create the text box no corridors found
+            tag.map.title <- tags$style(HTML(".leaflet-control.map-title {
+          transform: translate(-50%,20%);
+          position: fixed !important;
+          left: 50%;
+          text-align: center;
+          padding-left: 10px; 
+          padding-right: 10px; 
+          background: rgba(255,255,255,0.75);
+          font-weight: bold;
+          font-size: 28px;
+          color: black;
+          }"))
+            title <- tags$div(
+              tag.map.title, HTML("No corridors found")
+            )  
+            
+            map1 <- leaflet(corridorCalc) %>% addTiles()%>%
+              addProviderTiles("Esri.WorldTopoMap", group = "TopoMap") %>%
+              addProviderTiles("Esri.WorldImagery", group = "Aerial") %>% 
+              addPolylines(lng = coordinates(corridorCalc)[,1],lat = coordinates(corridorCalc)[,2],weight=2, opacity=0.7, layerId=namesIndiv(corridorCalc),group =namesIndiv(corridorCalc))
+            map1 %>%
+              addControl(title, position = "topleft", className="map-title") %>% # to add the ext box of corridors not found
+              addScaleBar(position="bottomright",
+                          options=scaleBarOptions(maxWidth = 100, metric = TRUE, imperial = FALSE, updateWhenIdle = TRUE)) %>%
+              addLayersControl(
+                baseGroups = c("TopoMap","Aerial"),
+                # overlayGroups = c("indiv","corr"),
+                options = layersControlOptions(collapsed = FALSE))
+            
+          } else { # corridors found
+            ######################################################
+            ### updated plot per individual -- with corridors ##
+            ######################################################
+            ## include here as above how to select/unselec corridors when found out how to do that
+            map1 <- leaflet(corridorCalc) %>% addTiles()%>%
+              addProviderTiles("Esri.WorldTopoMap", group = "TopoMap") %>%
+              addProviderTiles("Esri.WorldImagery", group = "Aerial") %>% 
+              addPolylines(lng = coordinates(corridorCalc)[,1],lat = coordinates(corridorCalc)[,2],weight=2, opacity=0.7, layerId=namesIndiv(corridorCalc),group ="track")
+            for(n in corrDFr){
+              map1 <- map1 %>%
+                addPolylines(data=indDF[n:(n+1),],lng=~long,lat=~lat, color="red",weight = 6,opacity = 0.7, group="potential corridors")
+            }
+            map1 %>% 
+              # addCircles(data=centClust, lng=~x, lat=~y, group=~clusterID, radius=medSegleng*2, color="red") %>%
+              addScaleBar(position="bottomright",
+                          options=scaleBarOptions(maxWidth = 100, metric = TRUE, imperial = FALSE, updateWhenIdle = TRUE)) %>%
+              addLayersControl(
+                baseGroups = c("TopoMap","Aerial"),
+                # overlayGroups = centClust$clusterID,
+                overlayGroups = c("track","potential corridors"),
+                options = layersControlOptions(collapsed = FALSE)) 
+          }
+        }
+      })
+    }
   }
-  return(reactive({ current() }))
+  # data <- data %>% select(-c(LocID))
+  # if(all(is.na(data$corridorBehavior))){ data <- data %>% select(-c(corridorBehavior))}
+  # if(all(!(data$corridorBehavior))){data$corridorBehavior <- NULL} # there will always be the last NA of track...
+  # data_out <- reactive(data)
+  return(data_out)
 }
 
