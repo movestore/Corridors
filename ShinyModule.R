@@ -118,8 +118,8 @@ shinyModule <- function(input, output, session, data) {
                                     bsTooltip(id=ns(circPropnames[i]), title="Proportion of the circular variances that is low enough to be a valid corridor point. Low values indicate that the segments are (near) parallel (default: variances that are lower than 25 % of all variances)", placement = "bottom", trigger = "hover", options = list(container = "body"))), ## maybe change wording to make it simpler: the lower the value, the more parallel are the segments
                              column(1, numericInput(ns(timeThinnames[i]),"Thin track to X mins", value=0, step=1),
                                     bsTooltip(id=ns(timeThinnames[i]), title="This is specially recommended for high resolution tracks to ease finding regions with parallel segments. Default (=0) no thinning", placement = "bottom", trigger = "hover", options = list(container = "body"))),
-                             column(1, numericInput(ns(clustDistnames[i]),"Cluster radius (m)",value=500), #diameter of the cluster, i.e. width of the corridor
-                                    bsTooltip(id=ns(clustDistnames[i]), title="All identified corridor segments that fall within a circle will be grouped as a corridor cluster", placement = "bottom", trigger = "hover", options = list(container = "body"))
+                             column(1, numericInput(ns(clustDistnames[i]),"Cluster width (m)",value=500), #diameter of the cluster, i.e. width of the corridor
+                                    bsTooltip(id=ns(clustDistnames[i]), title="All identified corridor segments that fall within a circle of diameter X will be grouped as a corridor cluster. The 'cluster with' can be seen as the width of the corridor", placement = "bottom", trigger = "hover", options = list(container = "body"))
                              ),
                              column(1, numericInput(ns(clustNbnames[i]),"Segment number",value=3), #number of segments that corridor should have within a cluster
                                     bsTooltip(id=ns(clustNbnames[i]), title="Minimum number of segments that will define a cluster. Clusters with fewer segments will be excluded", placement = "bottom", trigger = "hover", options = list(container = "body"))
@@ -194,7 +194,7 @@ shinyModule <- function(input, output, session, data) {
               options = layersControlOptions(collapsed = FALSE))
         }
         
-        midPts_ind <- function(inputCorr, r, ns){### calculating clusters to define which segments belong "to the same corridor"
+        midPts_ind <- function(inputCorr, d, ns){### calculating clusters to define which segments belong "to the same corridor"
           ## corridor segment midpoints
           midCrPts <- inputCorr@data[burstId(inputCorr)=="corridor",c("segMid_x","segMid_y","LocID")]
           coordinates(midCrPts) <- ~segMid_x+segMid_y
@@ -204,7 +204,7 @@ shinyModule <- function(input, output, session, data) {
           ## clustering
           hc <- hclust(as.dist(dist), method="single") # complete single
           # define clusters based on a tree "height" cutoff distance (distance between corridor clusters) and add them to the SpDataFrame
-          midCrPts$clusterID <- cutree(hc, h=r/2) # r=RVupdate$clustDist
+          midCrPts$clusterID <- cutree(hc, h=d/2) # d=RVupdate$clustDist
           # add nb of corridor segments per cluster to SpDataFrame
           tbCount <- data.frame(table(midCrPts$clusterID))
           midCrPts$nbCorrInClust <- NA
@@ -284,7 +284,7 @@ shinyModule <- function(input, output, session, data) {
             ######################################################
             ### default plot per individual -- with corridors ##
             ######################################################
-            mP <- midPts_ind(corridorCalc,r=500,ns=3)
+            mP <- midPts_ind(corridorCalc,d=500,ns=3)
             if(length(unique(mP$clusterID))>=1){
               corrPlot_ind(corridorCalc,indDF,mP)
             }else{
@@ -315,7 +315,7 @@ shinyModule <- function(input, output, session, data) {
             ### updated plot per individual -- with corridors ##
             ######################################################
             ## include here as above how to select/unselec corridors when found out how to do that
-            mP <- midPts_ind(corridorCalc,r=RVupdate$clustDist,ns=RVupdate$clustNb)
+            mP <- midPts_ind(corridorCalc,d=RVupdate$clustDist,ns=RVupdate$clustNb)
             if(length(unique(mP$clusterID))>=1){
               corrPlot_ind(corridorCalc,indDF,mP)
             }else{
