@@ -327,7 +327,8 @@ shinyModule <- function(input, output, session, data) {
     
     observe({ 
       selected_groups <- req(input[[paste0(plotnames[i],"_groups")]])
-      selClusts <- as.numeric(gsub("potential corridors cl:", "", selected_groups, perl=TRUE))
+      selected_groups_sub <- selected_groups[grepl("potential corridors cl:", selected_groups)] 
+      selClusts <- as.numeric(gsub("potential corridors cl:", "", selected_groups_sub, perl=TRUE))
       selClusts <- selClusts[complete.cases(selClusts)]
       indDFmod <- indDF_rv()
       selLocIDs <- indDFmod$LocID[indDFmod$clusterID%in%selClusts]
@@ -335,16 +336,6 @@ shinyModule <- function(input, output, session, data) {
       data_out(data)
     })
   }
-  # observeEvent() of button "Save selected corridors" and add these to the output data?
-  
-  
-  
-  # data  <- mutate(data, LocID = 1:nrow(data))
-  # data  <- mutate(data, corridorBehavior = NA)
-  # data <- data %>% select(-c(LocID)) ## remember to remove LocID, buhu this one is tricky as th einfo will be needed for the other indivlds, ha..
-  # if(all(is.na(data$corridorBehavior))){ data <- data %>% select(-c(corridorBehavior,LocID))}
-  # if(all(!(data$corridorBehavior))){data$corridorBehavior <- NULL} # there will always be the last NA of track...
-  # data_out <- reactive(data)
   return(data_out)
 }
 
