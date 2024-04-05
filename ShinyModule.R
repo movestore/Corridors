@@ -119,11 +119,9 @@ shinyModule <- function(input, output, session, data) {
                              column(1, numericInput(ns(timeThinnames[i]),"Thin track to X mins", value=0, step=1),
                                     bsTooltip(id=ns(timeThinnames[i]), title="This is specially recommended for high resolution tracks to ease finding regions with parallel segments. Default (=0) no thinning", placement = "bottom", trigger = "hover", options = list(container = "body"))),
                              column(1, numericInput(ns(clustDistnames[i]),"Cluster width (m)",value=500), #diameter of the cluster, i.e. width of the corridor
-                                    bsTooltip(id=ns(clustDistnames[i]), title="All identified corridor segments that fall within a circle of diameter X will be grouped as a corridor cluster. The 'cluster with' can be seen as the width of the corridor", placement = "bottom", trigger = "hover", options = list(container = "body"))
-                             ),
+                                    bsTooltip(id=ns(clustDistnames[i]), title="All identified corridor segments that fall within a circle of diameter X will be grouped as a corridor cluster. It can be seen as the width of the corridor", placement = "bottom", trigger = "hover", options = list(container = "body"))),
                              column(1, numericInput(ns(clustNbnames[i]),"Segment number",value=3), #number of segments that corridor should have within a cluster
-                                    bsTooltip(id=ns(clustNbnames[i]), title="Minimum number of segments that will define a cluster. Clusters with fewer segments will be excluded", placement = "bottom", trigger = "hover", options = list(container = "body"))
-                             ),
+                                    bsTooltip(id=ns(clustNbnames[i]), title="Minimum number of segments that will define a cluster. Clusters with fewer segments will be excluded", placement = "bottom", trigger = "hover", options = list(container = "body"))),
                              column(1,offset=1,actionBttn(ns(updateButton[i]), label="Update!", style="fill", color="success",icon=icon("redo"),size="md"))#
                            ),
                            withSpinner(leafletOutput(ns(plotnames[i]), height = "85vh"), type=5, size=1.5,color= "#28b78d") ## color the same as update button
